@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 
 import AuthView from '../views/AuthView.vue'
 import DashboardLayout from '../layouts/DashboardLayout.vue'
@@ -47,7 +47,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory('/V-Retail/'),
   routes
 })
 
