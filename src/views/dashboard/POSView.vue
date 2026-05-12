@@ -220,20 +220,69 @@
         <!-- Session Card -->
         <div class="bg-[#1e1b4b] rounded-3xl p-6 text-white shadow-lg shadow-indigo-900/20">
           <div class="flex items-center gap-3">
-            <div class="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-              </svg>
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <div class="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div>
+                <div class="text-sm font-black">{{ userName }}</div>
+                <div class="text-[9px] font-bold text-indigo-300 uppercase tracking-widest">Sesi Kasir Aktif</div>
+              </div>
             </div>
-            <div>
-              <div class="text-sm font-black">{{ userName }}</div>
-              <div class="text-[9px] font-bold text-indigo-300 uppercase tracking-widest">Sesi Kasir Aktif</div>
-            </div>
+            <button 
+              @click="handleCloseShift"
+              class="px-4 py-2 bg-rose-500/20 hover:bg-rose-500 text-rose-300 hover:text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border border-rose-500/30"
+            >
+              Tutup Kasir
+            </button>
           </div>
         </div>
       </div>
     </div>
     <!-- Penutup untuk screen-only -->
+    </div>
+
+    <!-- Modal Buka Kasir (Shift) -->
+    <div v-if="!currentShift && !loading" class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+      <div class="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl p-8 border border-slate-100 animate-in fade-in zoom-in duration-300">
+        <div class="flex flex-col items-center text-center mb-8">
+          <div class="h-16 w-16 rounded-2xl bg-brand/10 flex items-center justify-center text-brand mb-4">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h2 class="text-2xl font-black text-slate-900">Buka Kasir</h2>
+          <p class="text-slate-500 text-sm mt-2">Masukkan saldo awal di laci kasir untuk memulai shift hari ini.</p>
+        </div>
+
+        <div class="space-y-6">
+          <div class="relative">
+            <span class="absolute left-5 top-1/2 -translate-y-1/2 font-black text-slate-400">Rp</span>
+            <input 
+              v-model.number="startingBalanceInput" 
+              type="number" 
+              class="w-full pl-12 pr-6 py-5 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-brand/20 focus:bg-white outline-none transition-all font-black text-2xl text-slate-800"
+              placeholder="0"
+              @keyup.enter="handleOpenShift"
+            />
+          </div>
+
+          <button 
+            @click="handleOpenShift"
+            :disabled="isOpeningShift"
+            class="w-full bg-brand text-white py-5 rounded-3xl font-black text-sm shadow-xl shadow-brand/20 hover:bg-brand-dark hover:-translate-y-1 transition-all active:translate-y-0 disabled:opacity-50 flex items-center justify-center gap-3"
+          >
+            <svg v-if="isOpeningShift" class="animate-spin h-5 w-5" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            {{ isOpeningShift ? 'MEMBUKA...' : 'BUKA KASIR SEKARANG' }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Invoice Template (Hidden on screen, visible on print) -->
@@ -341,6 +390,11 @@ const paymentMethod = ref('TUNAI')
 const paymentReference = ref('')
 const userName = ref('Admin')
 const displayScale = ref('small')
+
+// Shift System State
+const currentShift = ref(null)
+const startingBalanceInput = ref(0)
+const isOpeningShift = ref(false)
 
 const receiptData = ref({
   items: [],
@@ -540,10 +594,67 @@ const processPayment = async () => {
   }
 }
 
-onMounted(() => {
-  fetchInventory()
+const checkActiveShift = async () => {
+  const { data, error } = await supabase
+    .from('pos_shifts')
+    .select('*')
+    .eq('status', 'OPEN')
+    .eq('cashier_name', userName.value)
+    .single()
+  
+  if (!error && data) {
+    currentShift.value = data
+  }
+}
+
+const handleOpenShift = async () => {
+  if (startingBalanceInput.value < 0) return
+  
+  isOpeningShift.value = true
+  const { data, error } = await supabase
+    .from('pos_shifts')
+    .insert({
+      cashier_name: userName.value,
+      starting_balance: startingBalanceInput.value,
+      status: 'OPEN'
+    })
+    .select()
+    .single()
+  
+  isOpeningShift.value = false
+  if (!error && data) {
+    currentShift.value = data
+  } else {
+    alert('Gagal membuka shift: ' + (error?.message || 'Unknown error'))
+  }
+}
+
+const handleCloseShift = async () => {
+  if (!confirm('Apakah Anda yakin ingin menutup kasir (selesai shift)?')) return
+  
+  const { error } = await supabase
+    .from('pos_shifts')
+    .update({
+      status: 'CLOSED',
+      closed_at: new Date().toISOString(),
+      ending_balance: 0 // Ideally calculate this from transactions
+    })
+    .eq('id', currentShift.value.id)
+  
+  if (!error) {
+    currentShift.value = null
+    startingBalanceInput.value = 0
+  } else {
+    alert('Gagal menutup shift: ' + error.message)
+  }
+}
+
+onMounted(async () => {
   const session = JSON.parse(localStorage.getItem('userSession') || '{}')
   if (session.name) userName.value = session.name
+  
+  await checkActiveShift()
+  fetchInventory()
 })
 </script>
 
